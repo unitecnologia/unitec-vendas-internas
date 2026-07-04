@@ -26,22 +26,23 @@ workflows:
       - name: Configurar assinatura de release (chave estavel)
         script: |
           set -e
-          STOREPASS="${CM_KEYSTORE_PASSWORD:-unitecvi2026}"
-          ALIAS="${CM_KEY_ALIAS:-unitecvi}"
+          # Mesma keystore do Forca de Vendas (ci/unitecfv-release.p12) ou grupo Codemagic.
+          STOREPASS="${CM_KEYSTORE_PASSWORD:-unitecfv2026}"
+          ALIAS="${CM_KEY_ALIAS:-unitecfv}"
           KEYPASS="${CM_KEY_PASSWORD:-$STOREPASS}"
           STORE_TYPE=""
           if [ -n "$CM_KEYSTORE" ]; then
             echo "Assinatura: keystore do grupo Codemagic (estavel)."
             STORE_FILE="$CM_BUILD_DIR/release-from-group.keystore"
             echo "$CM_KEYSTORE" | base64 --decode > "$STORE_FILE"
-          elif [ -f ci/unitecvi-release.p12 ]; then
-            echo "Assinatura: ci/unitecvi-release.p12 do repositorio (estavel)."
-            STORE_FILE="$CM_BUILD_DIR/unitecvi-release.p12"
-            cp ci/unitecvi-release.p12 "$STORE_FILE"
+          elif [ -f ci/unitecfv-release.p12 ]; then
+            echo "Assinatura: ci/unitecfv-release.p12 do repositorio (estavel)."
+            STORE_FILE="$CM_BUILD_DIR/unitecfv-release.p12"
+            cp ci/unitecfv-release.p12 "$STORE_FILE"
             STORE_TYPE="pkcs12"
           else
             echo "ERRO: nenhuma keystore de release encontrada."
-            echo "Configure o grupo keystore_credentials no Codemagic ou adicione ci/unitecvi-release.p12."
+            echo "Adicione ci/unitecfv-release.p12 ao repo ou configure o grupo keystore_credentials."
             exit 1
           fi
           {

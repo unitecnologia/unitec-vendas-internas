@@ -29,5 +29,5 @@ Build Android segue o mesmo padrão do app Força de Vendas (`codemagic.yaml`).
 
 1. Conecte o repositório `unitecnologia/unitec-vendas-internas` no [Codemagic](https://codemagic.io).
 2. Use o workflow `vendas-internas-android` definido em `codemagic.yaml`.
-3. Configure o grupo **`keystore_credentials`** (mesmo do FV) ou adicione `ci/unitecvi-release.p12` ao repo.
+3. Configure o grupo **`keystore_credentials`** (opcional; o repo já inclui `ci/unitecfv-release.p12`, mesma chave do FV).
 4. Troque o e-mail em `codemagic.yaml` → `publishing.email.recipients`.
