@@ -12,6 +12,20 @@ class LogEntry {
   final LogLevel level;
   final String tag;
   final String message;
+
+  Map<String, dynamic> toJson() => {
+        't': time.toIso8601String(),
+        'l': level.name,
+        'g': tag,
+        'm': message,
+      };
+
+  static LogEntry fromJson(Map<String, dynamic> j) => LogEntry(
+        DateTime.tryParse(j['t']?.toString() ?? '') ?? DateTime.now(),
+        LogLevel.values.firstWhere((e) => e.name == j['l'], orElse: () => LogLevel.info),
+        (j['g'] ?? '').toString(),
+        (j['m'] ?? '').toString(),
+      );
 }
 
 class AppLog extends ChangeNotifier {
@@ -34,15 +48,7 @@ class AppLog extends ChangeNotifier {
         final list = jsonDecode(raw) as List<dynamic>;
         _entries
           ..clear()
-          ..addAll(list.map((e) {
-            final j = Map<String, dynamic>.from(e as Map);
-            return LogEntry(
-              DateTime.tryParse(j['t']?.toString() ?? '') ?? DateTime.now(),
-              LogLevel.values.firstWhere((v) => v.name == j['l'], orElse: () => LogLevel.info),
-              (j['g'] ?? '').toString(),
-              (j['m'] ?? '').toString(),
-            );
-          }));
+          ..addAll(list.map((e) => LogEntry.fromJson(Map<String, dynamic>.from(e as Map))));
       }
     } catch (_) {}
     notifyListeners();
@@ -59,5 +65,37 @@ class AppLog extends ChangeNotifier {
       _entries.removeRange(0, _entries.length - _max);
     }
     notifyListeners();
+    _scheduleSave();
+  }
+
+  Future<void> clear() async {
+    _entries.clear();
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_key);
+    } catch (_) {}
+  }
+
+  String exportText() {
+    return _entries.map((e) {
+      final t = e.time.toIso8601String();
+      return '[$t] ${e.level.name.toUpperCase()} ${e.tag}: ${e.message}';
+    }).join('\n');
+  }
+
+  bool _saveScheduled = false;
+
+  void _scheduleSave() {
+    if (_saveScheduled) return;
+    _saveScheduled = true;
+    Future<void>.delayed(const Duration(milliseconds: 400), () async {
+      _saveScheduled = false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final data = _entries.map((e) => e.toJson()).toList();
+        await prefs.setString(_key, jsonEncode(data));
+      } catch (_) {}
+    });
   }
 }

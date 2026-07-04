@@ -15,9 +15,10 @@ class ServerDiscovery {
   static const int batchSize = 16;
 
   static Future<String?> find({
-    List<int> ports = defaultPorts,
+    List<int>? ports,
     void Function(int done, int total)? onProgress,
   }) async {
+    final portList = ports ?? ServerPorts.discoveryOrder;
     final prefixes = await _localPrefixes();
     if (prefixes.isEmpty) {
       AppLog.instance.warn('rede', 'Nenhuma sub-rede privada detectada no aparelho.');
@@ -26,11 +27,11 @@ class ServerDiscovery {
 
     AppLog.instance.info(
       'rede',
-      'Varredura: sub-redes ${prefixes.map((p) => '$p.x').join(', ')} nas portas ${ports.join('/')}',
+      'Varredura: sub-redes ${prefixes.map((p) => '$p.x').join(', ')} nas portas ${portList.join('/')}',
     );
 
     for (final prefix in prefixes) {
-      final found = await _scanSubnet(prefix, ports, onProgress);
+      final found = await _scanSubnet(prefix, portList, onProgress);
       if (found != null) {
         AppLog.instance.ok('rede', 'Servidor encontrado: $found');
         return found;
