@@ -1,0 +1,76 @@
+workflows:
+  vendas-internas-android:
+    name: Vendas Internas - Android APK
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.35.0
+      java: 17
+      groups:
+        - keystore_credentials
+    triggering:
+      events:
+        - push
+    scripts:
+      - name: Gerar projeto Android (android/ nao e versionado)
+        script: |
+          set -e
+          flutter create --org com.unitec --project-name unitec_vendas_internas --platforms=android .
+          grep -q '^android.newDsl=' android/gradle.properties || echo 'android.newDsl=false' >> android/gradle.properties
+          grep -q '^android.builtInKotlin=' android/gradle.properties || echo 'android.builtInKotlin=false' >> android/gradle.properties
+          echo "----- Flutter -----"; flutter --version || true
+      - name: Aplicar AndroidManifest (permissoes + HTTP cleartext)
+        script: |
+          set -e
+          cp ci/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+      - name: Configurar assinatura de release (chave estavel)
+        script: |
+          set -e
+          STOREPASS="${CM_KEYSTORE_PASSWORD:-unitecvi2026}"
+          ALIAS="${CM_KEY_ALIAS:-unitecvi}"
+          KEYPASS="${CM_KEY_PASSWORD:-$STOREPASS}"
+          STORE_TYPE=""
+          if [ -n "$CM_KEYSTORE" ]; then
+            echo "Assinatura: keystore do grupo Codemagic (estavel)."
+            STORE_FILE="$CM_BUILD_DIR/release-from-group.keystore"
+            echo "$CM_KEYSTORE" | base64 --decode > "$STORE_FILE"
+          elif [ -f ci/unitecvi-release.p12 ]; then
+            echo "Assinatura: ci/unitecvi-release.p12 do repositorio (estavel)."
+            STORE_FILE="$CM_BUILD_DIR/unitecvi-release.p12"
+            cp ci/unitecvi-release.p12 "$STORE_FILE"
+            STORE_TYPE="pkcs12"
+          else
+            echo "ERRO: nenhuma keystore de release encontrada."
+            echo "Configure o grupo keystore_credentials no Codemagic ou adicione ci/unitecvi-release.p12."
+            exit 1
+          fi
+          {
+            printf 'storePassword=%s\n' "$STOREPASS"
+            printf 'keyPassword=%s\n' "$KEYPASS"
+            printf 'keyAlias=%s\n' "$ALIAS"
+            printf 'storeFile=%s\n' "$STORE_FILE"
+            [ -n "$STORE_TYPE" ] && printf 'storeType=%s\n' "$STORE_TYPE"
+          } > android/key.properties
+          cp ci/build.gradle.kts android/app/build.gradle.kts
+          rm -f android/app/build.gradle
+      - name: Instalar dependencias
+        script: flutter pub get
+      - name: Build APK release (versionCode incremental)
+        script: |
+          set -e
+          PUBSPEC_CODE=$(grep '^version:' pubspec.yaml | sed 's/.*+//')
+          BUILD_NUM=${BUILD_NUMBER:-1}
+          if [ "$BUILD_NUM" -lt "$PUBSPEC_CODE" ]; then
+            BUILD_NUM=$PUBSPEC_CODE
+          fi
+          echo "versionCode=$BUILD_NUM (pubspec+$PUBSPEC_CODE, build #$BUILD_NUMBER)"
+          flutter build apk --release --build-number=$BUILD_NUM
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+    publishing:
+      email:
+        recipients:
+          - TROQUE_PELO_SEU_EMAIL@exemplo.com
+        notify:
+          success: true
+          failure: true
