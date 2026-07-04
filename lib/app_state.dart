@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'api/api_client.dart';
 import 'config.dart';
 import 'log/app_log.dart';
+import 'net/server_ports.dart';
 import 'sync/sync_service.dart';
 
 class AppState extends ChangeNotifier {
@@ -49,27 +50,46 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  String _normalizarUrl(String input, {int defaultPort = 8765}) {
-    var s = input.trim();
-    if (s.isEmpty) return s;
-    if (!s.startsWith('http://') && !s.startsWith('https://')) s = 'http://$s';
-    s = s.replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.tryParse(s);
-    if (uri != null && !uri.hasPort) {
-      s = '${uri.scheme}://${uri.host}:$defaultPort';
-    }
-    return s;
-  }
-
   Future<void> connectManual(String url) async {
-    final clean = _normalizarUrl(url);
-    if (clean.isEmpty) throw Exception('Informe o endereço do servidor.');
-    final r = await ApiClient.pingDetailed(clean);
-    if (!r.ok) throw Exception('Não foi possível conectar: ${r.message}');
-    await _applyConnection(clean);
+    final candidates = ServerPorts.connectionCandidates(url);
+    if (candidates.isEmpty) {
+      throw Exception('Informe o endereço do servidor.');
+    }
+
+    Object? lastError;
+    for (final candidate in candidates) {
+      try {
+        await _pingAndConnect(candidate);
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    final dev = ServerPorts.devPort;
+    final prod = ServerPorts.productionPort;
+    throw Exception(
+      'Não foi possível conectar.\n'
+      'Dev: IP:$dev · Produção: IP:$prod (mesma rede Wi‑Fi do PC).\n'
+      '${lastError ?? ''}',
+    );
   }
 
-  Future<void> connectFound(String baseUrl) async => _applyConnection(baseUrl);
+  Future<void> _pingAndConnect(String baseUrl) async {
+    AppLog.instance.info('conexão', 'Testando $baseUrl');
+    final r = await ApiClient.pingDetailed(baseUrl, timeout: const Duration(seconds: 5));
+    if (!r.ok) {
+      AppLog.instance.error('conexão', 'Falhou em $baseUrl: ${r.message}');
+      throw Exception('Não respondeu em $baseUrl (${r.message})');
+    }
+    AppLog.instance.ok('conexão', 'Conectado a $baseUrl (${r.ms} ms)');
+    await _applyConnection(baseUrl);
+  }
+
+  Future<void> connectFound(String baseUrl) async {
+    AppLog.instance.ok('conexão', 'Servidor encontrado: $baseUrl');
+    await _applyConnection(baseUrl);
+  }
 
   Future<void> _applyConnection(String baseUrl) async {
     config.baseUrl = baseUrl;

@@ -2,6 +2,18 @@
 
 App Flutter para vendas na loja (Wi‑Fi). Envia **orçamentos abertos** ao ERP; o **PDV** importa e finaliza a venda.
 
+## Conectar ao servidor
+
+| Ambiente | Porta | Exemplo no app |
+|----------|-------|----------------|
+| **Produção / loja** (instalador Unitec) | **8765** | `192.168.0.10:8765` |
+| **Desenvolvimento** (`dev-windows.ps1`) | **8000** | `192.168.0.10:8000` |
+
+- Se digitar só o IP (ex.: `192.168.0.10`), o app tenta **8765** e depois **8000**.
+- **Buscar na rede** varre a Wi‑Fi nas duas portas e chama `/api/v1/vendas-internas/ping`.
+- PC e celular na **mesma rede**; desative **modo avião**.
+- No Windows, libere a porta no firewall (produção: 8765; dev: 8000).
+
 ## Fluxo
 
 1. Conectar ao servidor ERP na rede local

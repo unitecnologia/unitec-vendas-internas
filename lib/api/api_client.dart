@@ -18,11 +18,12 @@ class ApiException implements Exception {
 }
 
 class PingResult {
-  PingResult({required this.ok, required this.message, this.ms});
+  PingResult({required this.ok, required this.message, this.ms, this.serverTime});
 
   final bool ok;
   final String message;
   final int? ms;
+  final String? serverTime;
 }
 
 class ApiClient {
@@ -63,7 +64,12 @@ class ApiClient {
       }
       final body = jsonDecode(r.body);
       final okBody = body is Map && (body['ok'] == true || body['server_time'] != null);
-      return PingResult(ok: okBody, message: okBody ? 'OK' : 'Resposta inesperada', ms: sw.elapsedMilliseconds);
+      return PingResult(
+        ok: okBody,
+        message: okBody ? 'OK' : 'Resposta inesperada',
+        ms: sw.elapsedMilliseconds,
+        serverTime: body is Map ? body['server_time']?.toString() : null,
+      );
     } on TimeoutException {
       sw.stop();
       return PingResult(ok: false, message: 'Tempo esgotado', ms: sw.elapsedMilliseconds);

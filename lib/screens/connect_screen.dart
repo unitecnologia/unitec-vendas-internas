@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../app_info.dart';
 import '../app_state.dart';
 import '../net/discovery.dart';
+import '../net/server_ports.dart';
 import '../ui/brand.dart';
+import 'log_screen.dart';
+import 'network_test_screen.dart';
 
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
@@ -18,13 +21,17 @@ class _ConnectScreenState extends State<ConnectScreen> {
   bool _buscando = false;
   bool _conectando = false;
   String? _erro;
+  String? _progresso;
 
   @override
   void initState() {
     super.initState();
-    context.read<AppState>().ensureDeviceIdentity();
-    final last = context.read<AppState>().config.lastBaseUrl;
-    if (last.isNotEmpty) _ipCtrl.text = last.replaceFirst(RegExp(r'^https?://'), '');
+    final state = context.read<AppState>();
+    state.ensureDeviceIdentity();
+    final last = state.config.lastBaseUrl;
+    if (last.isNotEmpty) {
+      _ipCtrl.text = last.replaceFirst(RegExp(r'^https?://'), '');
+    }
   }
 
   @override
@@ -33,27 +40,56 @@ class _ConnectScreenState extends State<ConnectScreen> {
     super.dispose();
   }
 
-  Future<void> _buscar() async {
-    setState(() { _buscando = true; _erro = null; });
+  Future<void> _buscarNaRede() async {
+    setState(() {
+      _buscando = true;
+      _erro = null;
+      _progresso = 'Procurando na rede...';
+    });
     try {
-      final found = await ServerDiscovery.find();
+      final found = await ServerDiscovery.find(
+        onProgress: (done, total) {
+          if (mounted) setState(() => _progresso = 'Procurando na rede... ($done/$total)');
+        },
+      );
       if (!mounted) return;
       if (found == null) {
-        setState(() { _erro = 'Servidor não encontrado. Digite o IP manualmente.'; _buscando = false; });
+        setState(() {
+          _erro =
+              'Servidor não encontrado na rede.\n'
+              'Dev: porta ${ServerPorts.devPort} · Produção: ${ServerPorts.productionPort}.\n'
+              'Digite o IP do PC ou use Testar rede / diagnóstico.';
+          _buscando = false;
+          _progresso = null;
+        });
         return;
       }
       await context.read<AppState>().connectFound(found);
     } catch (e) {
-      if (mounted) setState(() { _erro = e.toString(); _buscando = false; });
+      if (mounted) {
+        setState(() {
+          _erro = 'Falha na busca: $e';
+          _buscando = false;
+          _progresso = null;
+        });
+      }
     }
   }
 
-  Future<void> _conectar() async {
-    setState(() { _conectando = true; _erro = null; });
+  Future<void> _conectarManual([String? endereco]) async {
+    final url = (endereco ?? _ipCtrl.text).trim();
+    if (url.isEmpty) {
+      setState(() => _erro = 'Informe o IP do servidor (ex.: 192.168.0.10).');
+      return;
+    }
+    setState(() {
+      _conectando = true;
+      _erro = null;
+    });
     try {
-      await context.read<AppState>().connectManual(_ipCtrl.text);
+      await context.read<AppState>().connectManual(url);
     } catch (e) {
-      if (mounted) setState(() => _erro = e.toString());
+      if (mounted) setState(() => _erro = '$e');
     } finally {
       if (mounted) setState(() => _conectando = false);
     }
@@ -61,38 +97,109 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final busy = _buscando || _conectando;
+    final ocupado = _buscando || _conectando;
+    final ultimo = context.read<AppState>().config.lastBaseUrl;
     return Scaffold(
       backgroundColor: Brand.bg,
+      appBar: AppBar(
+        backgroundColor: Brand.bg,
+        elevation: 0,
+        title: const Text('Conectar ao servidor'),
+        actions: [
+          IconButton(
+            tooltip: 'Ver log',
+            icon: const Icon(Icons.article_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LogScreen()),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Text(
+                kAppName,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Brand.textPrimary,
+                ),
+              ),
+              Text(kAppVersionLabel, style: const TextStyle(color: Colors.black54)),
+              const SizedBox(height: 12),
+              const Text(
+                'O app e o PC do ERP precisam estar na mesma rede Wi‑Fi. '
+                'Em dev o ERP usa porta ${ServerPorts.devPort}; em produção, ${ServerPorts.productionPort}.',
+                style: TextStyle(color: Colors.black54, height: 1.35),
+              ),
               const SizedBox(height: 24),
-              Text(kAppName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Brand.textPrimary)),
-              Text('v$kAppVersion', style: const TextStyle(color: Colors.black54)),
-              const SizedBox(height: 32),
+              if (ultimo.isNotEmpty) ...[
+                FilledButton.icon(
+                  onPressed: ocupado ? null : () => _conectarManual(ultimo),
+                  icon: const Icon(Icons.replay),
+                  label: Text('Reconectar (${ultimo.replaceFirst(RegExp(r'^https?://'), '')})'),
+                ),
+                const SizedBox(height: 12),
+              ],
+              FilledButton.icon(
+                onPressed: ocupado ? null : _buscarNaRede,
+                icon: _buscando
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.wifi_find),
+                label: Text(_buscando ? 'Procurando...' : 'Procurar servidor na rede'),
+              ),
+              if (_progresso != null) ...[
+                const SizedBox(height: 8),
+                Text(_progresso!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+              ],
+              const SizedBox(height: 24),
+              const Row(children: [
+                Expanded(child: Divider()),
+                Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('ou')),
+                Expanded(child: Divider()),
+              ]),
+              const SizedBox(height: 24),
               TextField(
                 controller: _ipCtrl,
-                decoration: const InputDecoration(
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                enabled: !ocupado,
+                decoration: InputDecoration(
                   labelText: 'IP do servidor',
-                  hintText: '192.168.0.10:8765',
-                  border: OutlineInputBorder(),
+                  hintText: '192.168.0.10:${ServerPorts.defaultPort}',
+                  helperText: 'Se informar :8765 e falhar, tenta :8000 automaticamente.',
+                  border: const OutlineInputBorder(),
                   filled: true,
                   fillColor: Colors.white,
+                  prefixIcon: const Icon(Icons.lan),
                 ),
-                enabled: !busy,
+                onSubmitted: ocupado ? null : (_) => _conectarManual(),
               ),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: busy ? null : _conectar, child: _conectando ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Conectar')),
-              const SizedBox(height: 8),
-              OutlinedButton(onPressed: busy ? null : _buscar, child: _buscando ? const Text('Buscando...') : const Text('Buscar na rede')),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: ocupado ? null : () => _conectarManual(),
+                icon: _conectando
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.login),
+                label: const Text('Conectar por IP'),
+              ),
               if (_erro != null) ...[
-                const SizedBox(height: 16),
-                Text(_erro!, style: const TextStyle(color: Colors.red)),
+                const SizedBox(height: 20),
+                Text(_erro!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
               ],
+              const SizedBox(height: 24),
+              TextButton.icon(
+                onPressed: ocupado
+                    ? null
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const NetworkTestScreen()),
+                        ),
+                icon: const Icon(Icons.troubleshoot),
+                label: const Text('Testar rede / diagnóstico'),
+              ),
             ],
           ),
         ),
