@@ -21,8 +21,16 @@ String brDate(String? iso) {
 
 String situacaoLabel(String? s) => switch (s) {
       'aguardando' => 'Aguardando PDV',
+      'pendente' => 'Pendente (Monitor)',
       'no_caixa' => 'No caixa',
+      'faturado' => 'Faturado',
       'pago' => 'Pago',
       'cancelado' => 'Cancelado',
       _ => s ?? '—',
+    };
+
+String tipoLabel(String? tipo) => switch (tipo) {
+      'pedido' => 'Pedido',
+      'orcamento' => 'Orçamento',
+      _ => tipo ?? 'Orçamento',
     };

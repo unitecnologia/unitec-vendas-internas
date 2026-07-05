@@ -46,8 +46,9 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         final r = _rows[i];
                         final dav = (r['numero'] ?? '—').toString();
                         final ped = (r['numero_pedido'] ?? '').toString();
+                        final tipo = r['tipo']?.toString() ?? 'orcamento';
                         return ListTile(
-                          title: Text('DAV $dav${ped.isNotEmpty ? ' · Ped. $ped' : ''}'),
+                          title: Text('${tipoLabel(tipo)} · DAV $dav${ped.isNotEmpty ? ' · Ped. $ped' : ''}'),
                           subtitle: Text('${r['cliente_nome'] ?? ''}\n${situacaoLabel(r['situacao']?.toString())} · ${brDate(r['created_at']?.toString())}'),
                           isThreeLine: true,
                           trailing: Text(brMoney(r['total']), style: const TextStyle(fontWeight: FontWeight.bold)),

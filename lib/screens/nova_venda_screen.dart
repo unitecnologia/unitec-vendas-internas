@@ -4,8 +4,10 @@ import 'package:uuid/uuid.dart';
 
 import '../app_state.dart';
 import '../db/local_db.dart';
+import '../db/product_search.dart';
 import '../ui/brand.dart';
 import '../ui/format.dart';
+import '../ui/product_search_field.dart';
 
 class NovaVendaScreen extends StatefulWidget {
   const NovaVendaScreen({super.key, this.clienteInicial});
@@ -49,13 +51,26 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
     super.dispose();
   }
 
-  Future<void> _buscarProdutos(String termo) async {
-    final like = '%${termo.toUpperCase()}%';
-    _produtos = await _db.query(
-      "SELECT * FROM products WHERE ativo = 1 AND (descricao LIKE ? OR codigo LIKE ? OR codigo_barras LIKE ?) ORDER BY descricao LIMIT 40",
-      [like, like, like],
-    );
-    if (mounted) setState(() {});
+  Future<void> _buscarProdutos(String termo, {bool fromScan = false}) async {
+    final rows = await ProductSearch.search(_db, termo, limit: 40);
+    if (!mounted) return;
+
+    if (fromScan && rows.length == 1) {
+      _addProduto(rows.first);
+      _busca.clear();
+      _produtos = await ProductSearch.search(_db, '', limit: 40);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${rows.first['descricao']} adicionado')),
+      );
+    } else if (fromScan && rows.isEmpty) {
+      _produtos = rows;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produto não encontrado para este código.')),
+      );
+    } else {
+      _produtos = rows;
+    }
+    setState(() {});
   }
 
   Future<void> _escolherCliente() async {
@@ -122,7 +137,7 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
 
   double get _total => _itens.fold(0.0, (s, i) => s + i.total);
 
-  Future<void> _enviar() async {
+  Future<void> _enviar(String tipo) async {
     if (_cliente == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecione um cliente.')));
       return;
@@ -137,6 +152,7 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
       final state = context.read<AppState>();
       final order = {
         'uuid': uuid,
+        'tipo': tipo,
         'device_uuid': state.config.deviceUuid,
         'cliente_id': _cliente!['id'],
         'cliente_nome': _cliente!['nome_razao'],
@@ -153,10 +169,18 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
                 })
             .toList(),
       };
-      final resp = await state.sync.enviarOrcamento(order);
+      final resp = await state.sync.enviarVenda(order);
       if (!mounted) return;
+      final isPedido = tipo == 'pedido';
+      final numero = resp['numero'] ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Orçamento ${resp['numero'] ?? ''} enviado. Aguardando PDV.')),
+        SnackBar(
+          content: Text(
+            isPedido
+                ? 'Pedido $numero enviado ao Monitor de Vendas.'
+                : 'Orçamento $numero enviado. Aguardando PDV.',
+          ),
+        ),
       );
       Navigator.pop(context);
     } catch (e) {
@@ -169,7 +193,7 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nova Venda')),
+      appBar: AppBar(title: const Text('Nova Venda / Consulta')),
       body: Column(
         children: [
           ListTile(
@@ -179,10 +203,11 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: TextField(
+            child: ProductSearchField(
               controller: _busca,
-              decoration: const InputDecoration(labelText: 'Buscar produto', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
-              onChanged: _buscarProdutos,
+              labelText: 'Buscar produto',
+              onSearch: (v) => _buscarProdutos(v),
+              onScan: (code) => _buscarProdutos(code, fromScan: true),
             ),
           ),
           SizedBox(
@@ -237,8 +262,28 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
                 Row(
                   children: [
                     Text('Total: ${brMoney(_total)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    FilledButton(onPressed: _enviando ? null : _enviar, child: _enviando ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Enviar orçamento')),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _enviando ? null : () => _enviar('orcamento'),
+                        child: _enviando
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Enviar orçamento'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _enviando ? null : () => _enviar('pedido'),
+                        child: _enviando
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Enviar pedido'),
+                      ),
+                    ),
                   ],
                 ),
               ],

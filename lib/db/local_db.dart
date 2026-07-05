@@ -18,8 +18,19 @@ class LocalDb {
     final dir = await getDatabasesPath();
     return openDatabase(
       p.join(dir, 'unitec_vi.db'),
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
+        await _createSchema(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute("ALTER TABLE pedidos ADD COLUMN tipo TEXT NOT NULL DEFAULT 'orcamento'");
+        }
+      },
+    );
+  }
+
+  Future<void> _createSchema(Database db) async {
         await db.execute('''
           CREATE TABLE products (
             id INTEGER PRIMARY KEY,
@@ -47,12 +58,11 @@ class LocalDb {
         await db.execute('''
           CREATE TABLE pedidos (
             uuid TEXT PRIMARY KEY,
+            tipo TEXT NOT NULL DEFAULT 'orcamento',
             numero TEXT, numero_pedido TEXT, situacao TEXT, total REAL,
             cliente_id INTEGER, cliente_nome TEXT, created_at TEXT, payload_json TEXT
           )''');
         await db.execute('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)');
-      },
-    );
   }
 
   Future<void> upsertAll(String table, List<dynamic> rows, Map<String, dynamic> Function(Map<String, dynamic>) map) async {
@@ -89,6 +99,7 @@ class LocalDb {
       'pedidos',
       {
         'uuid': p['uuid'],
+        'tipo': p['tipo'] ?? 'orcamento',
         'numero': p['numero'],
         'numero_pedido': p['numero_pedido'],
         'situacao': p['situacao'],

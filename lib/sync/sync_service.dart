@@ -65,7 +65,7 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>> enviarOrcamento(Map<String, dynamic> order) async {
+  Future<Map<String, dynamic>> enviarVenda(Map<String, dynamic> order) async {
     final resp = await api.push([order]);
     final results = (resp['results'] as List?) ?? [];
     if (results.isEmpty) throw ApiException('Resposta vazia do servidor');
@@ -75,6 +75,7 @@ class SyncService extends ChangeNotifier {
     }
     await _db.upsertPedido({
       'uuid': first['uuid'] ?? order['uuid'],
+      'tipo': first['tipo'] ?? order['tipo'] ?? 'orcamento',
       'numero': first['numero'],
       'numero_pedido': first['numero_pedido'],
       'situacao': first['situacao'] ?? 'aguardando',
@@ -146,6 +147,7 @@ class SyncService extends ChangeNotifier {
       final p = Map<String, dynamic>.from(raw);
       await _db.upsertPedido({
         'uuid': p['uuid'],
+        'tipo': p['tipo'] ?? 'orcamento',
         'numero': p['numero'],
         'numero_pedido': p['numero_pedido'],
         'situacao': p['situacao'],
