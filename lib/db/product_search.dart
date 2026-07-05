@@ -38,11 +38,11 @@ class ProductSearch {
       '''
       SELECT * FROM products
       WHERE ativo = 1 AND (
-        descricao LIKE ? OR codigo LIKE ? OR codigo_barras LIKE ?
+        descricao LIKE ? OR codigo LIKE ? OR codigo_barras LIKE ? OR marca LIKE ?
       )
       ORDER BY descricao LIMIT ?
       ''',
-      [like, like, like, limit],
+      [like, like, like, like, limit],
     );
   }
 }

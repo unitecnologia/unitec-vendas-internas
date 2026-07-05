@@ -106,6 +106,8 @@ class SyncService extends ChangeNotifier {
           'preco_atacado': _d(r['preco_atacado']),
           'qtd_atacado': _d(r['qtd_atacado']),
           'estoque': _d(r['estoque']),
+          'estoque_reservado': _d(r['estoque_reservado']),
+          'estoque_disponivel': _d(r['estoque_disponivel']),
           'usa_tab_preco': _b(r['usa_tab_preco']),
           'mostrar_no_app': _b(r['mostrar_no_app']),
           'promo_preco_venda': _d(r['promo_preco_venda']),

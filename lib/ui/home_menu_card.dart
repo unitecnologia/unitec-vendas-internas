@@ -37,7 +37,12 @@ class HomeMenuCard extends StatelessWidget {
                 children: [
                   Icon(icon, size: 32, color: color),
                   const Spacer(),
-                  Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Brand.textPrimary)),
+                  Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Brand.textPrimary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),

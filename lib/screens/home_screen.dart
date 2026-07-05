@@ -93,8 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.15),
                   delegate: SliverChildListDelegate([
-                    HomeMenuCard(label: 'Nova Venda', icon: Icons.point_of_sale_rounded, color: Brand.blue, onTap: () => _abrir(const NovaVendaScreen()), badge: null),
-                    HomeMenuCard(label: 'Meus Pedidos', icon: Icons.receipt_long_rounded, color: const Color(0xFF6366F1), onTap: () => _abrir(const PedidosScreen()), badge: _pedidos > 0 ? '$_pedidos' : null),
+                    HomeMenuCard(label: 'Nova Venda / Orçamento', icon: Icons.point_of_sale_rounded, color: Brand.blue, onTap: () => _abrir(const NovaVendaScreen()), badge: null),
+                    HomeMenuCard(label: 'Meus Pedidos / Orçamento', icon: Icons.receipt_long_rounded, color: const Color(0xFF6366F1), onTap: () => _abrir(const PedidosScreen()), badge: _pedidos > 0 ? '$_pedidos' : null),
                     HomeMenuCard(label: 'Clientes', icon: Icons.people_alt_rounded, color: Brand.green, onTap: () => _abrir(const ClientesScreen())),
                     HomeMenuCard(label: 'Produtos/Consulta', icon: Icons.inventory_2_rounded, color: const Color(0xFF2563EB), onTap: () => _abrir(const ProdutosScreen())),
                   ]),

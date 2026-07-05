@@ -18,13 +18,17 @@ class LocalDb {
     final dir = await getDatabasesPath();
     return openDatabase(
       p.join(dir, 'unitec_vi.db'),
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await _createSchema(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute("ALTER TABLE pedidos ADD COLUMN tipo TEXT NOT NULL DEFAULT 'orcamento'");
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE products ADD COLUMN estoque_reservado REAL NOT NULL DEFAULT 0');
+          await db.execute('ALTER TABLE products ADD COLUMN estoque_disponivel REAL NOT NULL DEFAULT 0');
         }
       },
     );
@@ -37,7 +41,8 @@ class LocalDb {
             codigo TEXT, codigo_barras TEXT, descricao TEXT, unidade TEXT,
             marca TEXT, grupo TEXT,
             preco_venda REAL, preco_venda_prazo REAL, preco_atacado REAL, qtd_atacado REAL,
-            estoque REAL, usa_tab_preco INTEGER, mostrar_no_app INTEGER,
+            estoque REAL, estoque_reservado REAL, estoque_disponivel REAL,
+            usa_tab_preco INTEGER, mostrar_no_app INTEGER,
             promo_preco_venda REAL, foto_url TEXT, ativo INTEGER, updated_at TEXT
           )''');
         await db.execute('''

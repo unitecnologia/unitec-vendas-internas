@@ -1,9 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../app_state.dart';
 import '../db/local_db.dart';
 import '../db/product_search.dart';
+import '../ui/brand.dart';
+import '../ui/estoque_chips.dart';
 import '../ui/format.dart';
+import '../ui/produto_list_card.dart';
 import '../ui/product_search_field.dart';
+
+class FotoViewer extends StatelessWidget {
+  const FotoViewer({super.key, required this.url, this.titulo});
+
+  final String url;
+  final String? titulo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(titulo ?? 'Foto do produto', maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.8,
+          maxScale: 5,
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const CircularProgressIndicator(color: Colors.white);
+            },
+            errorBuilder: (_, __, ___) => const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                SizedBox(height: 12),
+                Text('Não foi possível carregar a foto.', style: TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _abrirFoto(BuildContext context, String url, String? titulo) {
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => FotoViewer(url: url, titulo: titulo)));
+}
 
 class ProdutosScreen extends StatefulWidget {
   const ProdutosScreen({super.key});
@@ -16,6 +66,7 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
   final _db = LocalDb.instance;
   final _busca = TextEditingController();
   List<Map<String, dynamic>> _rows = [];
+  bool _carregando = true;
 
   @override
   void initState() {
@@ -30,6 +81,7 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
   }
 
   Future<void> _buscar(String termo, {bool fromScan = false}) async {
+    setState(() => _carregando = true);
     _rows = await ProductSearch.search(_db, termo, limit: 200);
     if (!mounted) return;
     if (fromScan && _rows.isEmpty) {
@@ -37,46 +89,157 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
         const SnackBar(content: Text('Produto não encontrado para este código.')),
       );
     }
-    setState(() {});
+    setState(() => _carregando = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final base = context.read<AppState>().config.baseUrl;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Produtos/Consulta')),
+      backgroundColor: Brand.bg,
+      appBar: AppBar(
+        title: const Text('Produtos/Consulta'),
+        backgroundColor: Brand.blue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            decoration: const BoxDecoration(
+              color: Brand.blue,
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+            ),
             child: ProductSearchField(
               controller: _busca,
-              labelText: 'Buscar ou escanear',
+              headerStyle: true,
+              labelText: 'Buscar ou escanear código de barras',
               onSearch: _buscar,
               onScan: (code) => _buscar(code, fromScan: true),
             ),
           ),
-          Expanded(
-            child: _rows.isEmpty
-                ? const Center(child: Text('Nenhum produto encontrado.'))
-                : ListView.separated(
-                    itemCount: _rows.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final p = _rows[i];
-                      final barras = (p['codigo_barras'] ?? '').toString();
-                      return ListTile(
-                        title: Text((p['descricao'] ?? '').toString()),
-                        subtitle: Text(
-                          'Cód. ${p['codigo'] ?? ''}'
-                          '${barras.isNotEmpty ? ' · EAN $barras' : ''}'
-                          ' · Est.: ${p['estoque'] ?? 0}',
-                        ),
-                        trailing: Text(brMoney(p['preco_venda']), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      );
+          if (_carregando)
+            const Expanded(child: Center(child: CircularProgressIndicator()))
+          else if (_rows.isEmpty)
+            const Expanded(child: Center(child: Text('Nenhum produto encontrado.')))
+          else
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 16),
+                itemCount: _rows.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) {
+                  final p = _rows[i];
+                  final fotoUrl = produtoFotoUrl(base, p['foto_url']);
+                  return ProdutoListCard(
+                    produto: p,
+                    baseUrl: base,
+                    onTap: () => _detalhe(p),
+                    onFotoTap: () {
+                      if (fotoUrl != null) {
+                        _abrirFoto(context, fotoUrl, (p['descricao'] ?? '').toString());
+                      }
                     },
-                  ),
-          ),
+                  );
+                },
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  void _detalhe(Map<String, dynamic> p) {
+    final promo = (p['promo_preco_venda'] as num?)?.toDouble() ?? 0;
+    final base = context.read<AppState>().config.baseUrl;
+    final fotoUrl = produtoFotoUrl(base, p['foto_url']);
+    final descricao = (p['descricao'] ?? '').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(99)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (fotoUrl != null)
+                Center(
+                  child: GestureDetector(
+                    onTap: () => _abrirFoto(sheetCtx, fotoUrl, descricao),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        fotoUrl,
+                        height: 160,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        loadingBuilder: (context, child, progress) => progress == null
+                            ? child
+                            : const SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
+                      ),
+                    ),
+                  ),
+                ),
+              if (fotoUrl != null) const SizedBox(height: 14),
+              Text(descricao, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text('Cód. ${p['codigo'] ?? ''}  •  ${p['marca'] ?? ''}', style: const TextStyle(color: Colors.black54)),
+              const SizedBox(height: 16),
+              EstoquePainel(produto: p),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              _linhaPreco('Preço à vista', brMoney(p['preco_venda'] as num?), Brand.precoVista),
+              _linhaPreco('Preço a prazo', brMoney(p['preco_venda_prazo'] as num?), Brand.precoPrazo),
+              _linhaPreco('Preço atacado', brMoney(p['preco_atacado'] as num?), Brand.precoAtacado),
+              if (promo > 0) _linhaPreco('Promoção', brMoney(promo), const Color(0xFF7C3AED)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _linhaPreco(String label, String valor, Color cor) {
+    const fg = Colors.white;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: cor,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [BoxShadow(color: cor.withValues(alpha: 0.28), blurRadius: 2, offset: const Offset(0, 1))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: fg.withValues(alpha: 0.95), shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: fg))),
+            Text(valor, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: fg)),
+          ],
+        ),
       ),
     );
   }
