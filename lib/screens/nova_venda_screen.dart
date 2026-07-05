@@ -182,7 +182,12 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final teclado = MediaQuery.viewInsetsOf(context).bottom;
+    // ~1 mm extra acima do teclado para os botões não ficarem colados.
+    const folgaTeclado = 6.0;
+
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Brand.bg,
       appBar: AppBar(
         title: const Text('Nova Venda / Consulta'),
@@ -277,8 +282,13 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
+      bottomNavigationBar: AnimatedPadding(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: teclado > 0 ? teclado + folgaTeclado : 0),
+        child: SafeArea(
+          top: false,
+          child: Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -329,6 +339,7 @@ class _NovaVendaScreenState extends State<NovaVendaScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
