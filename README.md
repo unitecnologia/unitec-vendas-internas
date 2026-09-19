@@ -30,7 +30,7 @@ Header do aparelho: `X-VI-Device`
 ## Desenvolvimento
 
 ```bash
-cd apps/vendas-internas
+cd C:\Projetos\unitec-vendas-internas
 flutter pub get
 flutter run
 ```
